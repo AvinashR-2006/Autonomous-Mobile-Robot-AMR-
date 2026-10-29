@@ -12,17 +12,19 @@
 ## Table of Contents
 1. [Introduction & Robot Showcase](#1-introduction--robot-showcase)
 2. [Repository Directory Structure](#2-repository-directory-structure)
-3. [Step 1: Raspberry Pi 5 Setup, Headless Booting & SSH](#3-step-1-raspberry-pi-5-setup-headless-booting--ssh)
-4. [Step 2: ROS 2 Jazzy Installation & Dependencies](#4-step-2-ros-2-jazzy-installation--dependencies)
-5. [Step 3: Hardware Architecture & Wiring](#5-step-3-hardware-architecture--wiring)
-6. [Step 4: Serial Communication & Fused IMU Gyro Odometry](#6-step-4-serial-communication--fused-imu-gyro-odometry)
-7. [Step 5: Visualizing LiDAR & Remote Telemetry (RViz2 vs Foxglove)](#7-step-5-visualizing-lidar--remote-telemetry-rviz2-vs-foxglove)
-8. [Step 6: 2D Mapping with SLAM Toolbox](#8-step-6-2d-mapping-with-slam-toolbox)
-9. [Step 7: AMCL Localization & Setting Initial Pose](#9-step-7-amcl-localization--setting-initial-pose)
-10. [Step 8: Autonomous Navigation with Nav2 (MPPI Controller)](#10-step-8-autonomous-navigation-with-nav2-mppi-controller)
-11. [Step 9: Diagnostics, Common Errors & Solutions Matrix](#11-step-9-diagnostics-common-errors--solutions-matrix)
-12. [Step 10: Future Enhancements & Scope of Improvement](#12-step-10-future-enhancements--scope-of-improvement)
-13. [References & Brochure](#13-references--brochure)
+3. [Built-in ROS 2 vs. Repository Files & Quickstart](#3-built-in-ros-2-vs-repository-files--quickstart)
+4. [Step 1: Raspberry Pi 5 Setup, Headless Booting & SSH](#4-step-1-raspberry-pi-5-setup-headless-booting--ssh)
+5. [Step 2: ROS 2 Jazzy Installation & Dependencies](#5-step-2-ros-2-jazzy-installation--dependencies)
+6. [Step 3: Hardware Architecture & Wiring](#6-step-3-hardware-architecture--wiring)
+7. [Step 4: Serial Communication & Fused IMU Gyro Odometry](#7-step-4-serial-communication--fused-imu-gyro-odometry)
+8. [Step 5: Visualizing LiDAR & Remote Telemetry (RViz2 vs Foxglove)](#8-step-5-visualizing-lidar--remote-telemetry-rviz2-vs-foxglove)
+9. [Step 6: 2D Mapping with SLAM Toolbox](#9-step-6-2d-mapping-with-slam-toolbox)
+10. [Step 7: AMCL Localization & Setting Initial Pose](#10-step-7-amcl-localization--setting-initial-pose)
+11. [Step 8: Autonomous Navigation with Nav2 (MPPI Controller)](#11-step-8-autonomous-navigation-with-nav2-mppi-controller)
+12. [Step 9: Adapting to Other Robots & Custom Chassis Tuning Guide](#12-step-9-adapting-to-other-robots--custom-chassis-tuning-guide)
+13. [Step 10: Diagnostics, Common Errors & Solutions Matrix](#13-step-10-diagnostics-common-errors--solutions-matrix)
+14. [Step 11: Future Enhancements & Scope of Improvement](#14-step-11-future-enhancements--scope-of-improvement)
+15. [References & Brochure](#15-references--brochure)
 
 ---
 
@@ -90,7 +92,37 @@ Autonomous-Mobile-Robot-AMR-/
 
 ---
 
-## 3. Step 1: Raspberry Pi 5 Setup, Headless Booting & SSH
+## 3. Built-in ROS 2 vs. Repository Files & Quickstart
+
+Students often ask: *"Will these files already be on my Raspberry Pi when I install ROS 2, or do I need this repository?"*
+
+### What ROS 2 installs automatically (`sudo apt install`):
+- The core binaries for SLAM Toolbox and Nav2.
+- Generic default launch files located in `/opt/ros/jazzy/share/`.
+- **Why default configs fail:** Default ROS 2 configs assume ideal two-wheeled differential drive with no wheel slip, use generic desktop GPU batch sizes (2000 samples) that overheat the Pi 5, and have thick inflation layers that choke indoor corridors.
+
+### What THIS Repository provides:
+All hardware-specific drivers, mathematical sensor fusion, and fine-tuned configurations:
+1. `ugv02_base_node.py`: Hardware driver fusing 9-axis gyro rate with wheel encoders.
+2. `mapper_params_online_async.yaml`: Indoor-calibrated Ceres scan matcher settings.
+3. `nav2_params.yaml`: Pi 5 optimized Nav2 configuration (10 Hz MPPI, turn-in-place heading priority, 0.22m inflation).
+4. `save_map_safe.py`: Robust map saver overcoming ROS 2 Jazzy QoS timeouts.
+5. `goal_relay.py`: Foxglove-to-Nav2 goal bridge.
+
+### Quickstart on a Fresh Raspberry Pi:
+```bash
+# 1. Clone the repository into your home directory:
+cd ~
+git clone https://github.com/AvinashR-2006/Autonomous-Mobile-Robot-AMR-.git
+
+# 2. Make Python scripts executable:
+chmod +x ~/Autonomous-Mobile-Robot-AMR-/src/base_driver/ugv02_base_node.py
+chmod +x ~/Autonomous-Mobile-Robot-AMR-/src/utils/*.py
+```
+
+---
+
+## 4. Step 1: Raspberry Pi 5 Setup, Headless Booting & SSH
 
 For an Autonomous Mobile Robot, operating "headless" (without a monitor, keyboard, or mouse attached to the robot) is mandatory.
 
@@ -146,7 +178,7 @@ By default, Ubuntu enables a serial Linux login console on the Pi's primary UART
 
 ---
 
-## 4. Step 2: ROS 2 Jazzy Installation & Dependencies
+## 5. Step 2: ROS 2 Jazzy Installation & Dependencies
 
 After rebooting, log back in via SSH and install ROS 2 Jazzy:
 
@@ -183,7 +215,7 @@ source ~/.bashrc
 
 ---
 
-## 5. Step 3: Hardware Architecture & Wiring
+## 6. Step 3: Hardware Architecture & Wiring
 
 ```
 +-------------------------------------------------------------------+
@@ -223,7 +255,7 @@ source ~/.bashrc
 
 ---
 
-## 6. Step 4: Serial Communication & Fused IMU Gyro Odometry
+## 7. Step 4: Serial Communication & Fused IMU Gyro Odometry
 
 ### The Skid-Steer Scrubbing Problem
 Standard differential drive kinematics assume pure rolling without lateral slip:
@@ -245,11 +277,11 @@ To solve this permanently without expensive external motion capture:
    $$y_t = y_{t-1} + \Delta d \cdot \sin\left(\theta_{t-1} + \frac{w_z \Delta t}{2}\right)$$
 
 ### Auto-Zero Bias Calibration
-On startup, [`ugv02_base_node.py`](file:///Z:/src/base_driver/ugv02_base_node.py) collects 50 consecutive gyro readings (~1 second) while the rover sits stationary. It computes the average sensor offset $\text{bias} = \frac{1}{N}\sum \text{raw\_gz}$ and subtracts it in real-time, eliminating temperature-induced drift.
+On startup, [`ugv02_base_node.py`](src/base_driver/ugv02_base_node.py) collects 50 consecutive gyro readings (~1 second) while the rover sits stationary. It computes the average sensor offset $\text{bias} = \frac{1}{N}\sum \text{raw\_gz}$ and subtracts it in real-time, eliminating temperature-induced drift.
 
 ---
 
-## 7. Step 5: Visualizing LiDAR & Remote Telemetry (RViz2 vs Foxglove)
+## 8. Step 5: Visualizing LiDAR & Remote Telemetry (RViz2 vs Foxglove)
 
 While desktop ROS 2 uses RViz2, running RViz2 on a remote headless robot over SSH X11 forwarding causes heavy packet loss, low frame rates, and severe rendering lag.
 
@@ -285,7 +317,7 @@ ws://<PI_IP_ADDRESS>:8765
 
 ---
 
-## 8. Step 6: 2D Mapping with SLAM Toolbox
+## 9. Step 6: 2D Mapping with SLAM Toolbox
 
 We use **SLAM Toolbox** (`online_async_launch.py`) for lifelong, real-time Ceres-solver graph SLAM.
 
@@ -298,19 +330,19 @@ We use **SLAM Toolbox** (`online_async_launch.py`) for lifelong, real-time Ceres
 ### Mapping Procedure:
 1. **Terminal 1:** Run Base Node:
    ```bash
-   python3 /home/robopi/ugv02_base_node.py
+   python3 ~/Autonomous-Mobile-Robot-AMR-/src/base_driver/ugv02_base_node.py
    ```
 2. **Terminal 2:** Run LiDAR:
    ```bash
-   ros2 launch ldlidar_ros2 ld19.launch.py port_name:=/dev/ttyUSB0
+   ros2 launch ~/Autonomous-Mobile-Robot-AMR-/src/lidar/ld19.launch.py
    ```
-3. **Terminal 3:** Run Foxglove Bridge:
+3. **Terminal 3:** Run Foxglove Bridge & Goal Relay:
    ```bash
-   ros2 run foxglove_bridge foxglove_bridge
+   ros2 run foxglove_bridge foxglove_bridge & python3 ~/Autonomous-Mobile-Robot-AMR-/src/utils/goal_relay.py
    ```
 4. **Terminal 4:** Launch SLAM Toolbox:
    ```bash
-   ros2 launch slam_toolbox online_async_launch.py slam_params_file:=/home/robopi/mapper_params_online_async.yaml
+   ros2 launch slam_toolbox online_async_launch.py slam_params_file:=~/Autonomous-Mobile-Robot-AMR-/config/mapper_params_online_async.yaml
    ```
 5. In Foxglove, use the **Teleop** pad to drive the robot smoothly through the space.
 6. **Closing the Loop:** Drive the robot back to its exact starting location. SLAM Toolbox will match the initial scan features and lock the graph with zero cumulative drift!
@@ -326,18 +358,18 @@ Standard `ros2 run nav2_map_server map_saver_cli` often fails in ROS 2 Jazzy wit
 
 **While SLAM is still running**, open a terminal and run our fail-safe exporter:
 ```bash
-python3 /home/robopi/save_map_safe.py
+python3 ~/Autonomous-Mobile-Robot-AMR-/src/utils/save_map_safe.py ~/my_room_map
 ```
-This generates `/home/robopi/my_room_map.pgm` and `/home/robopi/my_room_map.yaml` in 0.2 seconds.
+This generates `~/my_room_map.pgm` and `~/my_room_map.yaml` in 0.2 seconds.
 
 ---
 
-## 9. Step 7: AMCL Localization & Setting Initial Pose
+## 10. Step 7: AMCL Localization & Setting Initial Pose
 
 Once the map is saved, stop SLAM Toolbox (`Ctrl+C`). Launch Nav2 with the saved map:
 
 ```bash
-ros2 launch nav2_bringup bringup_launch.py map:=/home/robopi/my_room_map.yaml params_file:=/home/robopi/nav2_params.yaml use_sim_time:=false
+ros2 launch nav2_bringup bringup_launch.py map:=~/my_room_map.yaml params_file:=~/Autonomous-Mobile-Robot-AMR-/config/nav2_params.yaml use_sim_time:=false
 ```
 
 ### The Critical "Display Frame" Fix in Foxglove
@@ -371,7 +403,7 @@ Follow these exact steps:
 
 ---
 
-## 10. Step 8: Autonomous Navigation with Nav2 (MPPI Controller)
+## 11. Step 8: Autonomous Navigation with Nav2 (MPPI Controller)
 
 ### Sending an Autonomous Goal
 1. In the 3D panel toolbar, select **`Publish 2D pose (/goal_pose)`**.
@@ -385,7 +417,7 @@ Follow these exact steps:
 </p>
 
 ### Controller Tuning on Raspberry Pi 5
-In [`nav2_params.yaml`](file:///Z:/config/nav2_params.yaml), we implemented the following critical optimizations:
+In [`nav2_params.yaml`](config/nav2_params.yaml), we implemented the following critical optimizations:
 - **`expected_planner_frequency: 1.0 Hz`** (Reduced from 20 Hz): Prevents CPU starvation on the Pi 5.
 - **`controller_frequency: 10.0 Hz`**: Guarantees zero missed control cycles.
 - **`batch_size: 200`, `time_steps: 25`**: Right-sized for ARM Cortex-A76 cores.
@@ -396,7 +428,77 @@ In [`nav2_params.yaml`](file:///Z:/config/nav2_params.yaml), we implemented the 
 
 ---
 
-## 11. Step 9: Diagnostics, Common Errors & Solutions Matrix
+## 12. Step 9: Adapting to Other Robots & Custom Chassis Tuning Guide
+
+What if a student or researcher is building a **different robot chassis** (e.g., 2-wheel differential drive, 4-wheel rover, custom Arduino/STM32 motor controller, or different LiDAR)?
+
+Here is the exact step-by-step engineering guide to tune this code for ANY mobile robot.
+
+### 1. Adapting Base Kinematics in `ugv02_base_node.py`
+
+Look at lines 12–26 in [`ugv02_base_node.py`](src/base_driver/ugv02_base_node.py):
+```python
+self.declare_parameter('port', '/dev/ttyAMA0')
+self.declare_parameter('baud', 115200)
+self.declare_parameter('wheel_track_m', 0.203)
+self.declare_parameter('meters_per_unit', 0.01)
+self.declare_parameter('max_linear_speed', 0.45)
+self.declare_parameter('max_angular_speed', 1.20)
+```
+
+- **`wheel_track_m`:** Measure the physical distance between the center of the left wheels and right wheels in meters using a ruler.
+- **`meters_per_unit`:** The conversion factor from raw encoder ticks to linear meters:
+  $$\text{meters\_per\_unit} = \frac{\pi \times \text{Wheel Diameter [m]}}{\text{Encoder Ticks Per Revolution} \times \text{Gearbox Ratio}}$$
+- **Serial Port:** If using an Arduino or USB microcontroller, change `port` to `/dev/ttyUSB0` or `/dev/ttyACM0`.
+
+### 2. Calibrating ANY IMU Gyroscope (The 360° Tape Test)
+
+Every IMU (MPU6050, BNO055, QMI8658, ICM-20948) has a specific gyroscope sensitivity. To calibrate your sensor:
+
+1. **Check Datasheet Full-Scale Range:**
+   For example, an IMU set to $\pm 2000^\circ/\text{s}$ has a sensitivity of $16.4 \text{ LSB} / (^\circ/\text{s})$.
+   $$\text{Scale}_{\text{theoretical}} = 16.4 \times \frac{180}{\pi} = 939.6 \text{ LSB / (rad/s)}$$
+2. **Empirical Physical Tape Verification:**
+   - Place a piece of tape on the robot and align it with a tape mark on the floor.
+   - Run the base node and monitor `/odom` in a terminal:
+     ```bash
+     ros2 topic echo /odom/pose/pose/orientation
+     ```
+   - Rotate the physical robot by hand on the floor exactly $360.0^\circ$ (1 full revolution) back to the tape mark.
+   - Convert the reported quaternion $(z, w)$ to degrees: $\text{Yaw} = 2 \times \arctan2(z, w) \times \frac{180}{\pi}$.
+   - If the robot reports $+320^\circ$ instead of $+360^\circ$:
+     $$\text{New Gyro Scale} = \text{Old Gyro Scale} \times \frac{\text{Reported Angle}}{360.0^\circ} = 939.6 \times \frac{320}{360} = 835.2$$
+   - Update `self.gyro_scale` in `ugv02_base_node.py`. Repeat until a $360^\circ$ physical spin reports exactly $360^\circ \pm 1^\circ$ in ROS!
+
+### 3. Adapting to Different LiDAR Sensors
+
+If using an RPLiDAR (A1/A2/A3), YDLIDAR, or Slamtec:
+1. Install your LiDAR's ROS 2 driver package (e.g. `ros-jazzy-rplidar-ros`).
+2. Update the static transform in [`ld19.launch.py`](src/lidar/ld19.launch.py):
+   ```python
+   arguments=['x_offset', 'y_offset', 'z_height', 'roll', 'pitch', 'yaw', 'base_link', 'your_lidar_frame']
+   ```
+   Measure how many centimeters forward (`x`) and upward (`z`) your LiDAR is mounted relative to the center of the wheels.
+
+### 4. Adapting Nav2 to Other Chassis Kinematics
+
+In [`nav2_params.yaml`](config/nav2_params.yaml):
+- **For 2-Wheel Differential Drive (e.g. TurtleBot):**
+  - Keep `motion_model: "DiffDrive"`. Wheel encoders slip much less, but fusing IMU gyro is still best practice.
+- **For Mecanum / Omnidirectional Drive (Strafe capable):**
+  - Change `motion_model: "Omni"`.
+  - Enable lateral velocity: set `vy_max: 0.30` and `vy_std: 0.15`.
+- **For Different Robot Dimensions:**
+  - Measure robot radius from center to outermost corner.
+  - In `local_costmap` and `global_costmap`, update:
+    ```yaml
+    robot_radius: <YOUR_ROBOT_RADIUS>
+    inflation_radius: <YOUR_ROBOT_RADIUS + 0.07>
+    ```
+
+---
+
+## 13. Step 10: Diagnostics, Common Errors & Solutions Matrix
 
 | Symptom / Error Message | Root Cause | Solution |
 |---|---|---|
@@ -413,7 +515,7 @@ In [`nav2_params.yaml`](file:///Z:/config/nav2_params.yaml), we implemented the 
 
 ---
 
-## 12. Step 10: Future Enhancements & Scope of Improvement
+## 14. Step 11: Future Enhancements & Scope of Improvement
 
 1. **Autonomous Frontier Exploration (`explore_lite`):**
    - Automatically explore unknown rooms by identifying the boundary between known white space and unknown gray space without manual teleoperation.
@@ -426,7 +528,7 @@ In [`nav2_params.yaml`](file:///Z:/config/nav2_params.yaml), we implemented the 
 
 ---
 
-## 13. References & Brochure
+## 15. References & Brochure
 
 - **Waveshare UGV02 Technical Brochure:** Available in [`docs/Waveshare_UGV02_Brochure.pdf`](docs/Waveshare_UGV02_Brochure.pdf).
 - **ROS 2 Jazzy Documentation:** https://docs.ros.org/en/jazzy/
